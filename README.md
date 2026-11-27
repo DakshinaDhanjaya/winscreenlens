@@ -120,6 +120,12 @@ python -m unittest discover -s tests -v
 
 ---
 
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting a Pull Request or opening an Issue.
+
+---
+
 ## License
 
 Released under the [MIT License](LICENSE).
