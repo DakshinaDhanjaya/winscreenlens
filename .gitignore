@@ -1,0 +1,34 @@
+# Environment & Secrets (NEVER commit .env)
+.env
+*.env.local
+settings.json
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Byte-compiled / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# PyInstaller / Build / Installer artifacts
+build/
+dist/
+*.spec
+*.exe
+*.msi
+*.zip
+
+# Local test/setup artifacts
+*.lnk
+Uninstall_WinScreenLens.bat
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,9 @@
+PySide6>=6.7.0
+mss>=9.0.1
+Pillow>=10.3.0
+numpy>=1.26.0
+rapidocr>=2.0.0
+onnxruntime>=1.18.0
+requests>=2.31.0
+pynput>=1.7.7
+python-dotenv>=1.0.1
