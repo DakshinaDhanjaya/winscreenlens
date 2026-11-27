@@ -75,6 +75,8 @@ def build_executable() -> None:
     for mod in EXCLUDED_MODULES:
         exclude_args.extend(["--exclude-module", mod])
 
+    assets_dir = os.path.join(root_dir, "app", "assets")
+
     # PyInstaller's built-in PySide6 hooks automatically collect only QtCore/QtGui/QtWidgets + QPA.
     cmd = (
         [
@@ -91,7 +93,7 @@ def build_executable() -> None:
         + icon_arg
         + exclude_args
         + [
-            "--add-data=app/assets;app/assets",
+            f"--add-data={assets_dir};app/assets",
             "--hidden-import=PySide6.QtCore",
             "--hidden-import=PySide6.QtGui",
             "--hidden-import=PySide6.QtWidgets",
