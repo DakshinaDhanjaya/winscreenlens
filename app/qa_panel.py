@@ -27,6 +27,7 @@ class CircleActionPanel(QWidget):
     copy_requested = Signal()
     slang_requested = Signal()
     tts_requested = Signal(str, str)  # (text, lang)
+    tts_stop_requested = Signal()
     language_changed = Signal(str)    # (new_lang)
 
     LANGUAGES = [
@@ -48,6 +49,7 @@ class CircleActionPanel(QWidget):
         self._current_text = ""
         self._current_lang = "Sinhala"
         self._current_theme = "deep_slate"
+        self._tts_playing = False
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -118,8 +120,24 @@ class CircleActionPanel(QWidget):
             self.language_changed.emit(lang_code)
 
     def _on_tts_clicked(self) -> None:
-        if self._current_text:
+        if self._tts_playing:
+            self.tts_stop_requested.emit()
+        elif self._current_text:
             self.tts_requested.emit(self._current_text, self._current_lang)
+
+    def set_tts_playing(self, playing: bool) -> None:
+        """Toggle Listen button between Play and instant Stop state."""
+        self._tts_playing = bool(playing)
+        if self._tts_playing:
+            self.btn_tts.setText("⏹ Stop")
+            self.btn_tts.setStyleSheet(
+                "background-color: #991b1b; color: #fecaca; border: 1px solid #ef4444; "
+                "border-radius: 10px; padding: 4px 12px; font-weight: bold;"
+            )
+        else:
+            self.btn_tts.setText("🔊 Listen")
+            self.btn_tts.setStyleSheet("")
+        self.adjustSize()
 
     def apply_theme(self, theme_name: str) -> None:
         self._current_theme = theme_name
@@ -137,6 +155,7 @@ class CircleActionPanel(QWidget):
     def open_near(self, x: int, y: int, text: str = "", lang: str = "Sinhala") -> None:
         self._current_text = text
         self.set_current_language(lang)
+        self.set_tts_playing(False)
         self.btn_copy.setText("📋 Copy")
         self.explanation_box.clear()
         self.explanation_box.hide()

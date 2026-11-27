@@ -28,7 +28,6 @@ from app.win32_utils import (
     enable_per_monitor_dpi_awareness,
     get_auto_start_registry,
     set_auto_start_registry,
-    trim_process_memory,
 )
 
 if TYPE_CHECKING:
@@ -83,6 +82,7 @@ class HotkeyBridge(QObject):
     clear_triggered = Signal()
     hover_word_triggered = Signal()
     esc_triggered = Signal()
+    tts_state_changed = Signal(bool)
 
 
 class SettingsDialog(QDialog):
@@ -265,7 +265,7 @@ def _create_tray_icon() -> QIcon:
 class WinScreenLensApp:
     """Coordinates system tray, modular global hotkeys, and lazy-loaded UI/OCR components."""
 
-    IDLE_HIBERNATE_MS = 90_000  # Auto-release ONNX OCR + trim RAM after 90s of inactivity
+    IDLE_HIBERNATE_MS = 600_000  # Auto-release ONNX OCR after 10 min of complete inactivity
 
     def __init__(self, qt_app: QApplication) -> None:
         self.qt_app = qt_app
@@ -309,10 +309,7 @@ class WinScreenLensApp:
         self._setup_tray()
         self._start_global_hotkeys()
 
-        if self.config.low_resource_mode:
-            # Trim initialization pages immediately for tiny idle RAM footprint
-            QTimer.singleShot(800, trim_process_memory)
-        else:
+        if not self.config.low_resource_mode:
             self._start_background_warmup()
 
     # ------------------------------------------------------------------
@@ -377,6 +374,7 @@ class WinScreenLensApp:
             self._qa_panel.copy_requested.connect(self._copy_sinhala_text)
             self._qa_panel.slang_requested.connect(self._explain_last_snip_slang)
             self._qa_panel.tts_requested.connect(self._speak_text)
+            self._qa_panel.tts_stop_requested.connect(self.stop_speaking)
             self._qa_panel.language_changed.connect(self.switch_target_language)
         return self._qa_panel
 
@@ -398,7 +396,7 @@ class WinScreenLensApp:
         if self._tts is None:
             from app.tts_player import TextToSpeechPlayer
 
-            self._tts = TextToSpeechPlayer()
+            self._tts = TextToSpeechPlayer(on_state_changed=self.bridge.tts_state_changed.emit)
         return self._tts
 
     def _track_worker(self, worker) -> None:
@@ -438,7 +436,6 @@ class WinScreenLensApp:
         ):
             return
         unloaded = self._ocr.unload() if self._ocr is not None else False
-        trim_process_memory()
         if unloaded:
             _safe_log("[Eco Mode] Released idle OCR memory to OS.")
 
@@ -450,6 +447,7 @@ class WinScreenLensApp:
         self.bridge.fullscreen_triggered.connect(self.translate_fullscreen)
         self.bridge.clear_triggered.connect(self.clear_all)
         self.bridge.esc_triggered.connect(self._on_esc_pressed)
+        self.bridge.tts_state_changed.connect(self._on_tts_state_changed)
 
     def _setup_tray(self) -> None:
         self.tray = QSystemTrayIcon(_create_tray_icon(), self.qt_app)
@@ -651,12 +649,14 @@ class WinScreenLensApp:
 
     def start_snip(self, mode: str = "snip") -> None:
         self._idle_timer.stop()
+        self.stop_speaking()
         if self._qa_panel is not None:
             self._qa_panel.hide()
         self._get_selector().begin_selection(mode=mode)
 
     def _on_region_selected(self, region: ScreenRegion, mode: str) -> None:
         self._idle_timer.stop()
+        self.stop_speaking()
         if mode == "video":
             self.start_video_subtitle_mode(region)
             return
@@ -682,7 +682,7 @@ class WinScreenLensApp:
         from app.live_worker import OneShotTranslateWorker
 
         self.stop_live_worker()
-        self._notify("WinScreenLens", f"Translating selection to {self.config.target_language}...")
+        _safe_log(f"[WinScreenLens] Translating selection to {self.config.target_language}...")
         self._oneshot_worker = OneShotTranslateWorker(
             image=self._last_snip_image,
             region=self._last_snip_region,
@@ -853,6 +853,7 @@ class WinScreenLensApp:
             self._live_worker = None
 
     def clear_all(self) -> None:
+        self.stop_speaking()
         self.stop_live_worker()
         if self._slang_worker is not None and self._slang_worker.isRunning():
             self._slang_worker.wait(500)
@@ -940,6 +941,16 @@ class WinScreenLensApp:
         if not self.config.feature_tts:
             return
         self._get_tts().speak_async(text, lang)
+
+    def stop_speaking(self) -> None:
+        if self._tts is not None:
+            self._tts.stop()
+        if self._qa_panel is not None:
+            self._qa_panel.set_tts_playing(False)
+
+    def _on_tts_state_changed(self, playing: bool) -> None:
+        if self._qa_panel is not None:
+            self._qa_panel.set_tts_playing(playing)
 
     def open_settings(self) -> None:
         dlg = SettingsDialog(self.config)

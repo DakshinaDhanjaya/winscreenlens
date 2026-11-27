@@ -263,6 +263,7 @@ class GeminiRestModels:
 
 
 _GOOGLE_TRANSLATE_SESSION = None
+_PREFERRED_GOOGLE_CLIENT = "dict-chrome-ex"
 
 
 def _get_google_session():
@@ -273,7 +274,7 @@ def _get_google_session():
 
         sess = requests.Session()
         sess.trust_env = False
-        adapter = HTTPAdapter(pool_connections=6, pool_maxsize=12, max_retries=1)
+        adapter = HTTPAdapter(pool_connections=4, pool_maxsize=8, max_retries=1)
         sess.mount("https://", adapter)
         sess.mount("http://", adapter)
         _GOOGLE_TRANSLATE_SESSION = sess
@@ -333,8 +334,10 @@ def translate_via_google(texts: Sequence[str], target_language: str = "Sinhala")
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
 
-    # Resilient Google Translate clients to rotate across
-    google_clients = ["dict-chrome-ex", "gtx", "t"]
+    # Resilient Google Translate clients ordered with last working client first
+    global _PREFERRED_GOOGLE_CLIENT
+    base_clients = ["dict-chrome-ex", "gtx", "t"]
+    google_clients = [_PREFERRED_GOOGLE_CLIENT] + [c for c in base_clients if c != _PREFERRED_GOOGLE_CLIENT]
 
     # 1. Attempt fast batched request (newline separated)
     if len(texts) > 1:
@@ -343,8 +346,9 @@ def translate_via_google(texts: Sequence[str], target_language: str = "Sinhala")
         for client in google_clients:
             url = f"https://translate.googleapis.com/translate_a/single?client={client}&sl=auto&tl={lang_code}&dt=t&q={requests.utils.quote(joined)}"
             try:
-                resp = sess.get(url, headers=headers, timeout=4)
+                resp = sess.get(url, headers=headers, timeout=2.5)
                 if resp.status_code == 200:
+                    _PREFERRED_GOOGLE_CLIENT = client
                     raw = "".join([p[0] for p in resp.json()[0] if p and p[0]])
                     lines = raw.split("\n")
                     if len(lines) == len(texts):
@@ -359,10 +363,11 @@ def translate_via_google(texts: Sequence[str], target_language: str = "Sinhala")
         for client in google_clients:
             url = f"https://translate.googleapis.com/translate_a/single?client={client}&sl=auto&tl={lang_code}&dt=t&q={requests.utils.quote(item)}"
             try:
-                resp = sess.get(url, headers=headers, timeout=3.5)
+                resp = sess.get(url, headers=headers, timeout=2.5)
                 if resp.status_code == 200:
                     raw = "".join([p[0] for p in resp.json()[0] if p and p[0]])
                     if raw.strip():
+                        _PREFERRED_GOOGLE_CLIENT = client
                         translated_item = raw.strip()
                         break
             except Exception:

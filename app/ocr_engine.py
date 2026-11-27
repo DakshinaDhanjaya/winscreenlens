@@ -110,8 +110,8 @@ class LocalOCREngine:
             if self._engine is not None:
                 return self._engine
 
-            # Cap ONNX threads to keep memory arena small and avoid spawning excessive idle threads
-            intra_threads = max(1, min(4, (os.cpu_count() or 2) // 2))
+            # Tune RapidOCR for fast screen-text latency & balanced thread footprint
+            intra_threads = max(2, min(4, os.cpu_count() or 4))
             try:
                 from rapidocr import RapidOCR  # type: ignore
 
@@ -120,9 +120,10 @@ class LocalOCREngine:
                         params={
                             "Global.use_cls": False,
                             "Global.log_level": "error",
+                            "Det.limit_side_len": 384,
                             "EngineConfig.onnxruntime.intra_op_num_threads": intra_threads,
                             "EngineConfig.onnxruntime.inter_op_num_threads": 1,
-                            "EngineConfig.onnxruntime.enable_cpu_mem_arena": False,
+                            "EngineConfig.onnxruntime.enable_cpu_mem_arena": True,
                         }
                     )
                 except Exception:

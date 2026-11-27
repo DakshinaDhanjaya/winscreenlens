@@ -474,12 +474,30 @@ class TestWinScreenLensCore(unittest.TestCase):
         panel.hide()
 
     def test_tts_player_graceful_handling(self) -> None:
+        import sys
+        from PySide6.QtWidgets import QApplication
+        from app.qa_panel import CircleActionPanel
         from app.tts_player import TextToSpeechPlayer
 
-        tts = TextToSpeechPlayer()
+        states: list[bool] = []
+        tts = TextToSpeechPlayer(on_state_changed=states.append)
         # Empty text should safely no-op
         tts.speak_async("")
         tts.speak_async("   ")
+        tts.stop()
+        self.assertFalse(tts.is_speaking)
+
+        # CircleActionPanel TTS Play/Stop toggle
+        app = QApplication.instance() or QApplication(sys.argv)
+        panel = CircleActionPanel()
+        stop_clicks: list[bool] = []
+        panel.tts_stop_requested.connect(lambda: stop_clicks.append(True))
+        panel.set_tts_playing(True)
+        self.assertIn("Stop", panel.btn_tts.text())
+        panel.btn_tts.click()
+        self.assertEqual(len(stop_clicks), 1)
+        panel.set_tts_playing(False)
+        self.assertIn("Listen", panel.btn_tts.text())
 
     def test_bgra_zero_copy_signatures_and_ribbon_theme(self) -> None:
         import sys
