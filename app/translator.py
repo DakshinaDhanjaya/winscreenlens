@@ -229,9 +229,9 @@ class GeminiRestModels:
             if gen_cfg:
                 payload["generationConfig"] = gen_cfg
 
-        # Candidate models to try in order of resilience (gemini-3-flash-preview is active & verified)
+        # Candidate models to try (capped to 2 for <4s worst-case response)
         candidates: list[str] = []
-        for m in (model, "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-flash-latest"):
+        for m in (model, "gemini-3-flash-preview"):
             if m and m not in candidates:
                 candidates.append(m)
 
@@ -242,7 +242,7 @@ class GeminiRestModels:
         for target_model in candidates:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={self.api_key}"
             try:
-                resp = sess.post(url, json=payload, headers=headers, timeout=6)
+                resp = sess.post(url, json=payload, headers=headers, timeout=3.5)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates_out = data.get("candidates", [])
@@ -279,6 +279,15 @@ def _get_google_session():
         sess.mount("http://", adapter)
         _GOOGLE_TRANSLATE_SESSION = sess
     return _GOOGLE_TRANSLATE_SESSION
+
+
+def preconnect_google() -> None:
+    """Quietly warm up the HTTPS keep-alive pool in background so first translate/TTS has 0 TLS lag."""
+    try:
+        sess = _get_google_session()
+        sess.head("https://translate.googleapis.com/translate_a/single", timeout=1.5)
+    except Exception:
+        pass
 
 
 LANGUAGE_MAP: dict[str, str] = {
@@ -346,7 +355,7 @@ def translate_via_google(texts: Sequence[str], target_language: str = "Sinhala")
         for client in google_clients:
             url = f"https://translate.googleapis.com/translate_a/single?client={client}&sl=auto&tl={lang_code}&dt=t&q={requests.utils.quote(joined)}"
             try:
-                resp = sess.get(url, headers=headers, timeout=2.5)
+                resp = sess.get(url, headers=headers, timeout=2.0)
                 if resp.status_code == 200:
                     _PREFERRED_GOOGLE_CLIENT = client
                     raw = "".join([p[0] for p in resp.json()[0] if p and p[0]])
@@ -363,7 +372,7 @@ def translate_via_google(texts: Sequence[str], target_language: str = "Sinhala")
         for client in google_clients:
             url = f"https://translate.googleapis.com/translate_a/single?client={client}&sl=auto&tl={lang_code}&dt=t&q={requests.utils.quote(item)}"
             try:
-                resp = sess.get(url, headers=headers, timeout=2.5)
+                resp = sess.get(url, headers=headers, timeout=2.0)
                 if resp.status_code == 200:
                     raw = "".join([p[0] for p in resp.json()[0] if p and p[0]])
                     if raw.strip():
@@ -377,7 +386,7 @@ def translate_via_google(texts: Sequence[str], target_language: str = "Sinhala")
         if not translated_item:
             try:
                 mm_url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(item)}&langpair=autodetect|{lang_code}"
-                resp = sess.get(mm_url, headers=headers, timeout=3.5)
+                resp = sess.get(mm_url, headers=headers, timeout=2.0)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidate = data.get("responseData", {}).get("translatedText", "")
@@ -649,30 +658,33 @@ class HybridTranslator:
         found_def = ""
         found_example = ""
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        top_terms = candidates_to_search[:4]
 
-        for term in candidates_to_search[:4]:
+        def _query_term(term: str) -> tuple[str, str, str]:
             try:
                 url = f"https://api.urbandictionary.com/v0/define?term={requests.utils.quote(term)}"
-                resp = sess.get(url, headers=headers, timeout=3)
+                resp = sess.get(url, headers=headers, timeout=1.5)
                 if resp.status_code == 200:
-                    data = resp.json()
-                    item_list = data.get("list", [])
-                    if item_list:
-                        # Find best definition with positive net votes
-                        for item in item_list[:3]:
-                            up = item.get("thumbs_up", 0)
-                            down = item.get("thumbs_down", 0)
-                            raw_def = re.sub(r"[\[\]]", "", item.get("definition", "")).strip()
-                            raw_ex = re.sub(r"[\[\]]", "", item.get("example", "")).strip()
-                            if raw_def and len(raw_def) >= 12 and up >= down:
-                                found_term = term
-                                found_def = raw_def[:280]
-                                found_example = raw_ex[:180]
-                                break
-                        if found_def:
-                            break
+                    item_list = resp.json().get("list", [])
+                    for item in item_list[:3]:
+                        up = item.get("thumbs_up", 0)
+                        down = item.get("thumbs_down", 0)
+                        raw_def = re.sub(r"[\[\]]", "", item.get("definition", "")).strip()
+                        raw_ex = re.sub(r"[\[\]]", "", item.get("example", "")).strip()
+                        if raw_def and len(raw_def) >= 12 and up >= down:
+                            return term, raw_def[:280], raw_ex[:180]
             except Exception:
-                continue
+                pass
+            return "", "", ""
+
+        if top_terms:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=len(top_terms)) as pool:
+                for t_res, d_res, e_res in pool.map(_query_term, top_terms):
+                    if d_res:
+                        found_term, found_def, found_example = t_res, d_res, e_res
+                        break
 
         # If a valid slang definition was found, translate it to Sinhala
         if found_def:

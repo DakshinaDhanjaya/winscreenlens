@@ -477,7 +477,7 @@ class TestWinScreenLensCore(unittest.TestCase):
         import sys
         from PySide6.QtWidgets import QApplication
         from app.qa_panel import CircleActionPanel
-        from app.tts_player import TextToSpeechPlayer
+        from app.tts_player import TextToSpeechPlayer, split_tts_chunks
 
         states: list[bool] = []
         tts = TextToSpeechPlayer(on_state_changed=states.append)
@@ -486,6 +486,14 @@ class TestWinScreenLensCore(unittest.TestCase):
         tts.speak_async("   ")
         tts.stop()
         self.assertFalse(tts.is_speaking)
+
+        # Chunking splits long paragraphs cleanly at <= 90 chars per chunk
+        chunks = split_tts_chunks(
+            "Hello there, welcome to WinScreenLens. This is a fast sentence-aware TTS chunking test.",
+            max_chars=45,
+        )
+        self.assertGreaterEqual(len(chunks), 2)
+        self.assertTrue(all(len(c) <= 45 for c in chunks))
 
         # CircleActionPanel TTS Play/Stop toggle
         app = QApplication.instance() or QApplication(sys.argv)

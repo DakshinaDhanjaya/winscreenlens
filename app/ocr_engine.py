@@ -120,7 +120,7 @@ class LocalOCREngine:
                         params={
                             "Global.use_cls": False,
                             "Global.log_level": "error",
-                            "Det.limit_side_len": 384,
+                            "Det.limit_side_len": 320,
                             "EngineConfig.onnxruntime.intra_op_num_threads": intra_threads,
                             "EngineConfig.onnxruntime.inter_op_num_threads": 1,
                             "EngineConfig.onnxruntime.enable_cpu_mem_arena": True,
@@ -168,7 +168,29 @@ class LocalOCREngine:
         """Run local OCR on a PIL image and return normalized TextBox items."""
         engine = self._ensure_engine()
         rgb_img = image if image.mode == "RGB" else image.convert("RGB")
+        scale = 1.0
+        # Downscale huge full-screen / 4K captures to <=1280px so OCR stays <0.5s
+        max_w, max_h = 1280, 900
+        if rgb_img.width > max_w or rgb_img.height > max_h:
+            scale = min(max_w / rgb_img.width, max_h / rgb_img.height)
+            new_size = (max(32, int(round(rgb_img.width * scale))), max(32, int(round(rgb_img.height * scale))))
+            rgb_img = rgb_img.resize(new_size, Image.Resampling.BILINEAR)
+
         rgb_array = np.asarray(rgb_img)
         with self._infer_lock:
             raw = engine(rgb_array)
-        return normalize_rapidocr_output(raw, min_confidence=self.min_confidence)
+        boxes = normalize_rapidocr_output(raw, min_confidence=self.min_confidence)
+        if scale < 1.0 and boxes:
+            inv = 1.0 / scale
+            boxes = [
+                TextBox(
+                    x=int(round(b.x * inv)),
+                    y=int(round(b.y * inv)),
+                    width=max(1, int(round(b.width * inv))),
+                    height=max(1, int(round(b.height * inv))),
+                    text=b.text,
+                    confidence=b.confidence,
+                )
+                for b in boxes
+            ]
+        return boxes

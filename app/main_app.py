@@ -309,8 +309,8 @@ class WinScreenLensApp:
         self._setup_tray()
         self._start_global_hotkeys()
 
-        if not self.config.low_resource_mode:
-            self._start_background_warmup()
+        # Gentle delayed warmup (1.2s after tray appears) keeps startup instant & <1s responses ready
+        QTimer.singleShot(1200, self._start_background_warmup)
 
     # ------------------------------------------------------------------
     # Lazy component accessors (keeps startup instant & idle RAM minimal)
@@ -412,8 +412,29 @@ class WinScreenLensApp:
     def _start_background_warmup(self) -> None:
         import threading
 
-        ocr = self._get_ocr()
-        threading.Thread(target=ocr.warmup, daemon=True, name="OCRWarmup").start()
+        has_ocr_feature = any(
+            getattr(self.config, attr, True)
+            for attr in (
+                "feature_word_lookup",
+                "feature_snip",
+                "feature_video_subtitles",
+                "feature_fullscreen",
+                "feature_live_region",
+            )
+        )
+        if not has_ocr_feature:
+            return
+
+        def _warm() -> None:
+            try:
+                self._get_ocr().warmup()
+                from app.translator import preconnect_google
+
+                preconnect_google()
+            except Exception:
+                pass
+
+        threading.Thread(target=_warm, daemon=True, name="BalancedWarmup").start()
 
     def _schedule_idle_trim(self) -> None:
         if not self.config.low_resource_mode:
