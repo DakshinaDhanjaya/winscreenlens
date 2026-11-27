@@ -9,12 +9,12 @@ import zipfile
 
 
 def main() -> None:
-    root_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     os.chdir(root_dir)
 
     app_dist_dir = os.path.join(root_dir, "dist", "WinScreenLens")
     if not os.path.isfile(os.path.join(app_dist_dir, "WinScreenLens.exe")):
-        print("[Error] dist\\WinScreenLens\\WinScreenLens.exe not found. Run build_exe.py first.")
+        print("[Error] dist\\WinScreenLens\\WinScreenLens.exe not found. Run packaging\\build_exe.py first.")
         sys.exit(1)
 
     build_dir = os.path.join(root_dir, "build")
@@ -33,7 +33,7 @@ def main() -> None:
     print(f"      Payload size: {zip_mb:.1f} MB -> {payload_zip}")
 
     icon_file = os.path.join(root_dir, "app", "assets", "app_icon.ico")
-    setup_script = os.path.join(root_dir, "setup_wizard.py")
+    setup_script = os.path.join(root_dir, "packaging", "setup_wizard.py")
 
     print("[2/2] Packaging single-file WinScreenLens_Setup.exe...")
     cmd = [
@@ -44,6 +44,7 @@ def main() -> None:
         "--noconsole",
         "--clean",
         "--noconfirm",
+        f"--specpath={build_dir}",
         "--name=WinScreenLens_Setup",
         f"--icon={icon_file}",
         f"--add-data={payload_zip};.",

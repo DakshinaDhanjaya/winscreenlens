@@ -57,13 +57,16 @@ def build_executable() -> None:
     print(" WinScreenLens — Lean Standalone Executable Builder")
     print("=" * 60)
 
-    root_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     os.chdir(root_dir)
 
     run_script = os.path.join(root_dir, "run.py")
     if not os.path.exists(run_script):
         print(f"[Error] Entry point '{run_script}' not found!")
         sys.exit(1)
+
+    build_dir = os.path.join(root_dir, "build")
+    os.makedirs(build_dir, exist_ok=True)
 
     icon_file = os.path.join(root_dir, "app", "assets", "app_icon.ico")
     icon_arg = [f"--icon={icon_file}"] if os.path.exists(icon_file) else []
@@ -72,8 +75,7 @@ def build_executable() -> None:
     for mod in EXCLUDED_MODULES:
         exclude_args.extend(["--exclude-module", mod])
 
-    # Note: Do NOT use --collect-all=PySide6 because that bundles 640MB of unused WebEngine/3D/QML.
-    # PyInstaller's built-in PySide6 hooks automatically collect only QtCore/QtGui/QtWidgets + QPA!
+    # PyInstaller's built-in PySide6 hooks automatically collect only QtCore/QtGui/QtWidgets + QPA.
     cmd = (
         [
             sys.executable,
@@ -84,6 +86,7 @@ def build_executable() -> None:
             "--clean",
             "--onedir",
             "--noconfirm",
+            f"--specpath={build_dir}",
         ]
         + icon_arg
         + exclude_args
@@ -103,7 +106,7 @@ def build_executable() -> None:
         ]
     )
 
-    print(f"Running build command...\n")
+    print("Running build command...\n")
     try:
         subprocess.run(cmd, check=True)
         print("\n" + "=" * 60)

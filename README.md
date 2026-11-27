@@ -62,11 +62,11 @@ Or double-click **`Launch_WinScreenLens.vbs`** to run silently in the background
 1. **Build the lean standalone app (`dist\WinScreenLens\WinScreenLens.exe`):**
    ```powershell
    pip install pyinstaller
-   python build_exe.py
+   python packaging\build_exe.py
    ```
 2. **Package the single-file GUI Setup Installer (`dist\WinScreenLens_Setup.exe`):**
    ```powershell
-   python build_setup_exe.py
+   python packaging\build_setup_exe.py
    ```
    > **Note on Windows 11 Smart App Control:** Locally compiled unsigned `.exe` binaries will be blocked by Windows Smart App Control if it is set to *On*. Switch **Windows Security ➔ App & browser control ➔ Smart App Control settings** to **Off** to run locally built `.exe` installers, or launch via `Launch_WinScreenLens.vbs`.
 
@@ -76,31 +76,35 @@ Or double-click **`Launch_WinScreenLens.vbs`** to run silently in the background
 
 ```text
 winscreenlens/
-├── app/
-│   ├── assets/             # App icon (.ico / .png)
-│   ├── capture.py          # mss screen capture & zero-copy BGRA frame-diffing
-│   ├── config.py           # .env + persistent %LOCALAPPDATA%\WinScreenLens\settings.json
-│   ├── live_worker.py      # Background QThread workers for one-shot, live, video & slang
-│   ├── main_app.py         # System tray app, lazy component loader, Eco Mode & hotkeys
-│   ├── ocr_engine.py       # Thread-safe RapidOCR ONNX wrapper with idle unload()
-│   ├── overlay.py          # Click-through capture-excluded Qt overlay renderer
-│   ├── qa_panel.py         # Floating action bar & video subtitle control bar
-│   ├── snip_selector.py    # Full-screen snipping/lasso/window-snap selector
-│   ├── text_filter.py      # Subtitle cleanup, line clustering & sentence grouping
-│   ├── theme_manager.py    # Deep Slate, OLED Black, Cyberpunk & Frosted Glass palettes
-│   ├── translator.py       # Thread-safe LRU cache, Google Translate failover & AI clients
-│   ├── tts_player.py       # Async Windows SAPI & Google TTS audio pronunciation
-│   └── win32_utils.py      # Win32 DPI, display affinity, click-through & memory trimming
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # Automated Windows CI tests
+├── app/                            # Core application package
+│   ├── assets/                     # App icon (.ico / .png)
+│   ├── capture.py                  # mss capture & zero-copy BGRA frame-diffing
+│   ├── config.py                   # .env + persistent settings.json
+│   ├── live_worker.py              # Background QThread workers
+│   ├── main_app.py                 # System tray app, lazy loader, Eco Mode & hotkeys
+│   ├── ocr_engine.py               # Thread-safe RapidOCR ONNX wrapper with unload()
+│   ├── overlay.py                  # Click-through capture-excluded Qt overlay
+│   ├── qa_panel.py                 # Floating action bar & video subtitle controls
+│   ├── snip_selector.py            # Snipping, lasso & window-snap selector
+│   ├── text_filter.py              # Subtitle cleanup & sentence grouping
+│   ├── theme_manager.py            # 4 built-in color palettes
+│   ├── translator.py               # LRU cache, Google Translate failover & AI clients
+│   ├── tts_player.py               # Async Windows SAPI & Google TTS player
+│   └── win32_utils.py              # Win32 DPI, display affinity & memory trimming
+├── packaging/                      # Build & installer tooling
+│   ├── build_exe.py                # Lean PyInstaller app builder
+│   ├── build_setup_exe.py          # Single-file WinScreenLens_Setup.exe packager
+│   ├── setup_wizard.py             # GUI Setup Wizard for WinScreenLens_Setup.exe
+│   ├── installer.py                # Local shortcut & install helper
+│   └── make_icon.py                # Icon asset generator
 ├── tests/
-│   └── test_core.py        # Core unit test suite (27 tests)
-├── build_exe.py            # Lean PyInstaller app builder
-├── build_setup_exe.py      # Single-file WinScreenLens_Setup.exe packager
-├── setup_wizard.py         # Tkinter GUI Setup Wizard for WinScreenLens_Setup.exe
-├── installer.py            # Python installer & shortcut setup helper
-├── Install_WinScreenLens.bat
-├── Launch_WinScreenLens.vbs
-├── Launch_WinScreenLens.bat
-├── run.py                  # Entry point
+│   └── test_core.py                # Unit test suite (27 tests)
+├── Install_WinScreenLens.bat       # 1-Click local installer
+├── Launch_WinScreenLens.vbs        # 1-Click silent launcher (zero console)
+├── run.py                          # Application entry point
 ├── requirements.txt
 ├── .env.example
 └── LICENSE

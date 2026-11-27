@@ -9,7 +9,6 @@ in Windows Add/Remove Programs, and launches WinScreenLens.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 import threading

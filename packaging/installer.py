@@ -1,4 +1,4 @@
-"""WinScreenLens Automated Installer and Setup Wizard."""
+"""WinScreenLens Automated Installer and Shortcut Setup Helper."""
 
 from __future__ import annotations
 
@@ -8,7 +8,14 @@ import subprocess
 import sys
 
 
-def create_shortcut(target_exe: str, arguments: str, work_dir: str, shortcut_path: str, icon_path: str, description: str) -> bool:
+def create_shortcut(
+    target_exe: str,
+    arguments: str,
+    work_dir: str,
+    shortcut_path: str,
+    icon_path: str,
+    description: str,
+) -> bool:
     """Create a Windows .lnk shortcut using PowerShell COM object."""
     ps_cmd = (
         f"$ws = New-Object -ComObject WScript.Shell; "
@@ -24,7 +31,7 @@ def create_shortcut(target_exe: str, arguments: str, work_dir: str, shortcut_pat
     ps_cmd += "$s.Save()"
 
     try:
-        res = subprocess.run(
+        subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd],
             capture_output=True,
             text=True,
@@ -37,12 +44,11 @@ def create_shortcut(target_exe: str, arguments: str, work_dir: str, shortcut_pat
 
 
 def run_installer() -> None:
-    source_dir = os.path.dirname(os.path.abspath(__file__))
+    source_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     print("=" * 60)
     print("       WinScreenLens - Windows Setup and Installer")
     print("=" * 60)
 
-    # 1. Target directory: AppData\Local\Programs\WinScreenLens with fallback to current folder
     local_app_data = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
     default_target = os.path.join(local_app_data, "Programs", "WinScreenLens")
 
@@ -59,7 +65,7 @@ def run_installer() -> None:
 
     if copy_files and os.path.abspath(target_dir) != os.path.abspath(source_dir):
         print(f"\n[1/4] Installing application files to:\n      {target_dir}")
-        exclude_dirs = {".git", "build", "dist", "__pycache__", ".vscode"}
+        exclude_dirs = {".git", ".github", "build", "dist", "__pycache__", ".vscode", "packaging", "tests"}
         for item in os.listdir(source_dir):
             if item in exclude_dirs:
                 continue
@@ -77,7 +83,6 @@ def run_installer() -> None:
     else:
         print(f"\n[1/4] Configuring application in current folder:\n      {target_dir}")
 
-    # Determine runtime and target files
     pythonw_exe = os.path.join(target_dir, ".venv", "Scripts", "pythonw.exe")
     if not os.path.exists(pythonw_exe):
         pythonw_exe = os.path.join(source_dir, ".venv", "Scripts", "pythonw.exe")
@@ -90,8 +95,6 @@ def run_installer() -> None:
         icon_ico = os.path.join(source_dir, "app", "assets", "app_icon.ico")
 
     print("\n[2/4] Setting up Desktop and Start Menu shortcuts...")
-
-    # Desktop Shortcut
     user_profile = os.environ.get("USERPROFILE") or os.path.expanduser("~")
     desktop_dir = os.path.join(user_profile, "Desktop")
     if os.path.exists(desktop_dir):
@@ -99,7 +102,6 @@ def run_installer() -> None:
         if create_shortcut(pythonw_exe, f'"{run_py}"', target_dir, desk_lnk, icon_ico, "WinScreenLens - Screen Translator"):
             print(f"      * Desktop shortcut created: {desk_lnk}")
 
-    # Start Menu Shortcut
     app_data = os.environ.get("APPDATA") or os.path.join(user_profile, "AppData", "Roaming")
     start_menu_dir = os.path.join(app_data, "Microsoft", "Windows", "Start Menu", "Programs")
     if os.path.exists(start_menu_dir):
@@ -107,7 +109,6 @@ def run_installer() -> None:
         if create_shortcut(pythonw_exe, f'"{run_py}"', target_dir, start_lnk, icon_ico, "WinScreenLens - Screen Translator"):
             print(f"      * Start Menu shortcut created: {start_lnk}")
 
-    # 3. Create Uninstaller
     print("\n[3/4] Creating Uninstaller...")
     uninstaller_bat = os.path.join(target_dir, "Uninstall_WinScreenLens.bat")
     try:
@@ -117,25 +118,23 @@ def run_installer() -> None:
             f.write('taskkill /F /IM pythonw.exe /FI "WINDOWTITLE eq WinScreenLens*" >nul 2>&1\n')
             f.write(f'del /F /Q "{os.path.join(desktop_dir, "WinScreenLens.lnk")}" >nul 2>&1\n')
             f.write(f'del /F /Q "{os.path.join(start_menu_dir, "WinScreenLens.lnk")}" >nul 2>&1\n')
-            f.write(f'echo WinScreenLens shortcuts removed.\n')
-            f.write(f'echo To remove files, you may delete: {target_dir}\n')
+            f.write("echo WinScreenLens shortcuts removed.\n")
+            f.write(f"echo To remove files, you may delete: {target_dir}\n")
             f.write("echo WinScreenLens uninstalled successfully.\n")
             f.write("pause\n")
         print(f"      * Uninstaller created at: {uninstaller_bat}")
     except Exception as exc:
         print(f"      [Notice] Could not create uninstaller script: {exc}")
 
-    # 4. Finish and Launch
     print("\n[4/4] Setup Complete!")
     print("=" * 60)
     print(" WinScreenLens has been successfully installed!")
     print("  - Launch anytime from Desktop or Start Menu")
     print("  - Alt + W  : Instant word / sentence lookup")
-    print("  - Alt + Q  : Video subtitle mode")
+    print("  - Alt + Q / Ctrl+Shift+V : Video subtitle mode")
     print("  - Esc      : Dismiss / close overlays")
     print("=" * 60)
 
-    # Launch immediately
     try:
         subprocess.Popen([pythonw_exe, run_py], cwd=target_dir)
         print("\n WinScreenLens has been launched into your Windows System Tray!")
